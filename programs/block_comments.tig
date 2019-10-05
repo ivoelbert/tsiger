@@ -1,0 +1,15 @@
+/*
+    Testing block comments
+    /*
+        We can nest comments, too
+    */
+    /* And of course inline them */
+*/
+let
+    var N := 8
+in
+    N /* constant 8 program! */
+end
+/*
+    End of program!
+*/

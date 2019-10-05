@@ -37,7 +37,7 @@ const getInitialState = (state: RawState): State => {
         case RawState.LEXING_STRING:
             return {
                 state,
-                data: null,
+                data: { str: '' },
             };
     }
 };
@@ -126,13 +126,15 @@ function* lexChars(word: string, lineNumber: number, colNumber: number): Generat
     for (const char of word) {
         currentCol++;
 
+        const pos: Position = {
+            line: lineNumber,
+            column: currentCol,
+        };
+
         switch (LEXER_STATE.state) {
             case RawState.LEXING_TOKENS:
                 currentWord += char;
-                const pos: Position = {
-                    line: lineNumber,
-                    column: currentCol,
-                };
+
                 const wordToken: Token = tokenFromString(currentWord, pos);
 
                 if (wordToken) {
@@ -148,6 +150,10 @@ function* lexChars(word: string, lineNumber: number, colNumber: number): Generat
                     if (previousToken.token === RawToken.LineComen) {
                         // We found a // don't yield! Just transition to the line comment state
                         LEXER_STATE = getInitialState(RawState.LEXING_LINE_COMMENT);
+                    } else if (previousToken.token === RawToken.OpenComen) {
+                        // We found a /* don't yield! Transition to block comment state (depth 1)
+                        LEXER_STATE = getInitialState(RawState.LEXING_BLOCK_COMMENT);
+                        currentWord = char;
                     } else {
                         // We should yield this little guy and start building again from this current character.
                         currentWord = char;
@@ -157,6 +163,25 @@ function* lexChars(word: string, lineNumber: number, colNumber: number): Generat
                 }
 
             case RawState.LEXING_LINE_COMMENT:
+                break;
+
+            case RawState.LEXING_BLOCK_COMMENT:
+                if (currentWord === '*' && char === '/') {
+                    // We found a */ figure out if we need to go back to lexing tokens
+                    if (LEXER_STATE.data.depth === 1) {
+                        LEXER_STATE = getInitialState(RawState.LEXING_TOKENS);
+                        previousToken = tokenFromString('*/', pos);
+                    } else {
+                        LEXER_STATE.data.depth--;
+                    }
+                    currentWord = '';
+                } else if (currentWord === '/' && char === '*') {
+                    // We found a /*, increase comment depth
+                    LEXER_STATE.data.depth++;
+                    currentWord = '';
+                } else {
+                    currentWord = char;
+                }
                 break;
         }
     }
@@ -171,8 +196,21 @@ function* lexChars(word: string, lineNumber: number, colNumber: number): Generat
                 return;
             }
 
+            if (previousToken.token === RawToken.OpenComen) {
+                // We found a /* don't yield! Transition to block comment state (depth 1)
+                LEXER_STATE = getInitialState(RawState.LEXING_BLOCK_COMMENT);
+                return;
+            }
+
+            if (previousToken.token === RawToken.CloseComen && currentWord.length === 0) {
+                // Last token was a */ getting OUT of block comments so nothing to yield!
+                return;
+            }
+
+            // This token should be yieldable
             if (previousToken && yieldableTokens.includes(previousToken.token)) {
                 yield previousToken;
+                return;
             } else {
                 const pos: Position = {
                     line: lineNumber,
@@ -184,6 +222,9 @@ function* lexChars(word: string, lineNumber: number, colNumber: number): Generat
             }
 
         case RawState.LEXING_LINE_COMMENT:
-            break;
+            return;
+
+        case RawState.LEXING_BLOCK_COMMENT:
+            return;
     }
 }
