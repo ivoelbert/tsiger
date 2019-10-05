@@ -2,6 +2,7 @@ import { ReadStream } from 'fs';
 import { Token, tokenFromString, RawToken, yieldableTokens } from './tokens';
 import { Position, prettyPrintPosition } from './position';
 
+/* STATE STUFF! */
 enum RawState {
     LEXING_TOKENS,
     LEXING_LINE_COMMENT,
@@ -42,6 +43,12 @@ const getInitialState = (state: RawState): State => {
     }
 };
 
+// The lexer will mantain a global state.
+let LEXER_STATE: State = getInitialState(RawState.LEXING_TOKENS);
+
+/* END OF STATE STUFF! */
+
+// Error wrapper to show positions
 class LexError extends Error {
     constructor(msg: string, position: Position) {
         super();
@@ -49,8 +56,6 @@ class LexError extends Error {
         this.message = `LEX ERROR at ${prettyPrintPosition(position)}: ${msg}`;
     }
 }
-
-let LEXER_STATE: State = getInitialState(RawState.LEXING_TOKENS);
 
 export async function* lexer(readStream: ReadStream): AsyncGenerator<Token, void, void> {
     let lastPart: string = '';
