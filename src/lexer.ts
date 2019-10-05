@@ -1,6 +1,46 @@
 import { ReadStream } from 'fs';
-import { Token, tokenFromString } from './tokens';
+import { Token, tokenFromString, RawToken, yieldableTokens } from './tokens';
 import { Position, prettyPrintPosition } from './position';
+
+enum RawState {
+    LEXING_TOKENS,
+    LEXING_LINE_COMMENT,
+    LEXING_BLOCK_COMMENT,
+    LEXING_STRING,
+}
+
+type State = {
+    state: RawState;
+    data: any;
+};
+
+const getInitialState = (state: RawState): State => {
+    switch (state) {
+        case RawState.LEXING_TOKENS:
+            return {
+                state,
+                data: null,
+            };
+
+        case RawState.LEXING_LINE_COMMENT:
+            return {
+                state,
+                data: null,
+            };
+
+        case RawState.LEXING_BLOCK_COMMENT:
+            return {
+                state,
+                data: { depth: 1 },
+            };
+
+        case RawState.LEXING_STRING:
+            return {
+                state,
+                data: null,
+            };
+    }
+};
 
 class LexError extends Error {
     constructor(msg: string, position: Position) {
@@ -9,6 +49,8 @@ class LexError extends Error {
         this.message = `LEX ERROR at ${prettyPrintPosition(position)}: ${msg}`;
     }
 }
+
+let LEXER_STATE: State = getInitialState(RawState.LEXING_TOKENS);
 
 export async function* lexer(readStream: ReadStream): AsyncGenerator<Token, void, void> {
     let lastPart: string = '';
@@ -21,6 +63,11 @@ export async function* lexer(readStream: ReadStream): AsyncGenerator<Token, void
         lastPart = lines.pop();
 
         for (const line of lines) {
+            // This is a new line, bail out of LEXING_LINE_COMMENT
+            if (LEXER_STATE.state === RawState.LEXING_LINE_COMMENT) {
+                LEXER_STATE = getInitialState(RawState.LEXING_TOKENS);
+            }
+
             // Yield all tokes from that particular line
             yield* lexLine(line, lineNumber);
             lineNumber++;
@@ -58,11 +105,11 @@ function* lexLine(line: string, lineNumber: number): Generator<Token, void, void
         };
         const wordToken: Token = tokenFromString(word, pos);
 
-        if (wordToken) {
-            // The whole word is a valid token, yield it.
+        if (wordToken && yieldableTokens.includes(wordToken.token) && LEXER_STATE.state === RawState.LEXING_TOKENS) {
+            // The whole word is a valid token and we're looking for it, yield it.
             yield wordToken;
         } else {
-            // The word isn't a valid token, yield all tokens from that word
+            // The word isn't a valid token (or we're not looking for any token!), handle that word char by char.
             yield* lexChars(word, lineNumber, colNumber);
         }
 
@@ -79,40 +126,64 @@ function* lexChars(word: string, lineNumber: number, colNumber: number): Generat
     for (const char of word) {
         currentCol++;
 
-        currentWord += char;
-        const pos: Position = {
-            line: lineNumber,
-            column: currentCol,
-        }
-        const wordToken: Token = tokenFromString(currentWord, pos);
+        switch (LEXER_STATE.state) {
+            case RawState.LEXING_TOKENS:
+                currentWord += char;
+                const pos: Position = {
+                    line: lineNumber,
+                    column: currentCol,
+                };
+                const wordToken: Token = tokenFromString(currentWord, pos);
 
-        if (wordToken) {
-            // We're still building a token, continue...
-            previousToken = wordToken;
-        } else {
-            // We broke a token, yield whatever we built before.
-            if (!previousToken) {
-                // If there's nothing to yield, something went wrong.
-                throw new LexError(`Cannot build token from '${currentWord}'!`, pos);
-            }
+                if (wordToken) {
+                    // We're still building a token, continue...
+                    previousToken = wordToken;
+                } else {
+                    // We broke a token, yield whatever we built before.
+                    if (!previousToken) {
+                        // If there's nothing to yield, something went wrong.
+                        throw new LexError(`Cannot build token from '${currentWord}'!`, pos);
+                    }
 
-            // Yield the little guy and start building again from this character.
-            currentWord = char;
-            yield previousToken;
-            previousToken = tokenFromString(currentWord, pos);
+                    if (previousToken.token === RawToken.LineComen) {
+                        // We found a // don't yield! Just transition to the line comment state
+                        LEXER_STATE = getInitialState(RawState.LEXING_LINE_COMMENT);
+                    } else {
+                        // We should yield this little guy and start building again from this current character.
+                        currentWord = char;
+                        yield previousToken;
+                        previousToken = tokenFromString(currentWord, pos);
+                    }
+                }
+
+            case RawState.LEXING_LINE_COMMENT:
+                break;
         }
     }
 
-    // That was the last character! Yield whatever token we built so far
-    if (previousToken) {
-        yield previousToken;
-    } else {
-        const pos: Position = {
-            line: lineNumber,
-            column: currentCol,
-        }
+    // Handle last token:
+    switch (LEXER_STATE.state) {
+        case RawState.LEXING_TOKENS:
+            // Take care of transitions
+            if (previousToken.token === RawToken.LineComen) {
+                // We found a // don't yield! Just transition to the line comment state
+                LEXER_STATE = getInitialState(RawState.LEXING_LINE_COMMENT);
+                return;
+            }
 
-        // If we've got no token something went wrong!
-        throw new LexError(`Nothing to yield at the end of word`, pos);
+            if (previousToken && yieldableTokens.includes(previousToken.token)) {
+                yield previousToken;
+            } else {
+                const pos: Position = {
+                    line: lineNumber,
+                    column: currentCol,
+                };
+
+                // If we've got no token something went wrong!
+                throw new LexError(`Nothing to yield at the end of word`, pos);
+            }
+
+        case RawState.LEXING_LINE_COMMENT:
+            break;
     }
 }

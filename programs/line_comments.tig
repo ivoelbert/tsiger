@@ -1,0 +1,7 @@
+// Start of the program
+let
+    var N := 8
+in
+    N // Something happened here!
+end
+// That was the end

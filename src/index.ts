@@ -3,7 +3,7 @@ import { lexer } from './lexer';
 import { prettyPrintToken } from './tokens';
 
 const run = async () => {
-    const readStream: fs.ReadStream = fs.createReadStream('programs/simplest.tig', 'utf8');
+    const readStream: fs.ReadStream = fs.createReadStream('programs/line_comments.tig', 'utf8');
 
     try {
         for await (const token of lexer(readStream)) {
