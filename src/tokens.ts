@@ -235,6 +235,13 @@ export const tokenFromString = (str: string, pos: Position): Token => {
     return createToken(tok, pos, data);
 };
 
+export const stringTokenFromString = (str: string, pos: Position): Token => {
+    const tok: RawToken = RawToken.Str;
+    const data = dataFromToken(tok, str);
+
+    return createToken(tok, pos, data);
+}
+
 const dataFromToken = (tok: RawToken, str: string): any => {
     switch (tok) {
         case RawToken.Number:
