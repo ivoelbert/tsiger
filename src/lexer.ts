@@ -258,6 +258,7 @@ function* lexChars(word: string, lineNumber: number, colNumber: number): Generat
                 LEXER_STATE = getInitialState(RawState.LEXING_STRING);
                 LEXER_STATE.data.str = '';
                 LEXER_STATE.data.pos = pos;
+                return;
             }
 
             if (!yieldableTokens.includes(previousToken.token) && currentWord.length === 0) {

@@ -1,5 +1,5 @@
 let
-    var N := "I'm a string!"
+    var N := " I'm a string!"
     var A := "I'm a multiline
     string"
 in
