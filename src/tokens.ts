@@ -56,8 +56,6 @@ export enum RawToken {
     Quote, // "
 }
 
-const tok: RawToken = RawToken.Point;
-
 export const createToken = (tok: RawToken, position: Position, data?: any): Token => {
     return {
         token: tok,
