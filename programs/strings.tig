@@ -3,6 +3,6 @@ let
     var A := "I'm a multiline
     string"
 in
-    N
+    "I'm a string with an escaped quote \" you see?"
 end
 // End in comment state just because
