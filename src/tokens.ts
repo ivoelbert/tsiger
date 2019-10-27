@@ -212,11 +212,11 @@ export const yieldableTokens = [
     RawToken.Symbol,
     RawToken.Str,
     RawToken.Number,
-]
+];
 
 export const prettyPrintToken = (tok: Token): string => {
     const { token, position, data } = tok;
-    return `${tokenStringMap[token]}${data ? `(${data})` : ''} at ${prettyPrintPosition(position)}`;
+    return `${tokenStringMap[token]}${data !== null && data !== undefined ? `(${data})` : ''} at ${prettyPrintPosition(position)}`;
 };
 
 export const tokenFromString = (str: string, pos: Position): Token => {
@@ -238,7 +238,7 @@ export const stringTokenFromString = (str: string, pos: Position): Token => {
     const data = dataFromToken(tok, str);
 
     return createToken(tok, pos, data);
-}
+};
 
 const dataFromToken = (tok: RawToken, str: string): any => {
     switch (tok) {
